@@ -1,5 +1,6 @@
 import java.io.IOException;
-import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -26,30 +27,27 @@ public class MarkdownConverter {
 
         Deque<ContextoLista> listas = new ArrayDeque<>();
         Deque<String> enlacesActivos = new ArrayDeque<>();
-        Deque<String> etiquetasAbiertas = new ArrayDeque<>();
 
         int[] nivelEncabezado = {0};
-        boolean enBloqueCodigo = false;
-        boolean enCodigoLinea = false;
-        boolean enCita = false;
-        int omitirNivel = 0;
+        boolean[] enBloqueCodigo = {false};
+        boolean[] enCodigoLinea = {false};
+        int[] omitirNivel = {0};
 
         parser.parsear(html, new HTMLEditorKit.ParserCallback() {
 
             @Override
             public void handleStartTag(HTML.Tag t, MutableAttributeSet a, int pos) {
                 String tag = t.toString().toLowerCase();
-                etiquetasAbiertas.push(tag);
 
-                if (omitirNivel > 0) {
+                if (omitirNivel[0] > 0) {
                     if (tag.equals("script") || tag.equals("style")) {
-                        omitirNivel++;
+                        omitirNivel[0]++;
                     }
                     return;
                 }
 
                 if (tag.equals("script") || tag.equals("style")) {
-                    omitirNivel = 1;
+                    omitirNivel[0] = 1;
                     return;
                 }
 
@@ -67,10 +65,10 @@ public class MarkdownConverter {
                 } else if (tag.equals("pre")) {
                     prepararBloque(actual);
                     actual.append("```\n");
-                    enBloqueCodigo = true;
-                } else if (tag.equals("code") && !enBloqueCodigo) {
+                    enBloqueCodigo[0] = true;
+                } else if (tag.equals("code") && !enBloqueCodigo[0]) {
                     actual.append("`");
-                    enCodigoLinea = true;
+                    enCodigoLinea[0] = true;
                 } else if (tag.equals("b") || tag.equals("strong")) {
                     actual.append("**");
                 } else if (tag.equals("i") || tag.equals("em")) {
@@ -109,13 +107,10 @@ public class MarkdownConverter {
             @Override
             public void handleEndTag(HTML.Tag t, int pos) {
                 String tag = t.toString().toLowerCase();
-                if (!etiquetasAbiertas.isEmpty()) {
-                    etiquetasAbiertas.pop();
-                }
 
-                if (omitirNivel > 0) {
+                if (omitirNivel[0] > 0) {
                     if (tag.equals("script") || tag.equals("style")) {
-                        omitirNivel--;
+                        omitirNivel[0]--;
                     }
                     return;
                 }
@@ -132,10 +127,10 @@ public class MarkdownConverter {
                         actual.append("\n");
                     }
                     actual.append("```\n\n");
-                    enBloqueCodigo = false;
-                } else if (tag.equals("code") && !enBloqueCodigo) {
+                    enBloqueCodigo[0] = false;
+                } else if (tag.equals("code") && !enBloqueCodigo[0]) {
                     actual.append("`");
-                    enCodigoLinea = false;
+                    enCodigoLinea[0] = false;
                 } else if (tag.equals("b") || tag.equals("strong")) {
                     actual.append("**");
                 } else if (tag.equals("i") || tag.equals("em")) {
@@ -161,7 +156,7 @@ public class MarkdownConverter {
 
             @Override
             public void handleSimpleTag(HTML.Tag t, MutableAttributeSet a, int pos) {
-                if (omitirNivel > 0) {
+                if (omitirNivel[0] > 0) {
                     return;
                 }
                 String tag = t.toString().toLowerCase();
@@ -181,11 +176,11 @@ public class MarkdownConverter {
 
             @Override
             public void handleText(char[] data, int pos) {
-                if (omitirNivel > 0) {
+                if (omitirNivel[0] > 0) {
                     return;
                 }
                 String texto = new String(data);
-                if (enBloqueCodigo || enCodigoLinea) {
+                if (enBloqueCodigo[0] || enCodigoLinea[0]) {
                     pilaBuffers.peek().append(texto);
                     return;
                 }
@@ -230,8 +225,9 @@ public class MarkdownConverter {
             return referencia;
         }
         try {
-            return new URL(base, referencia).toString();
-        } catch (MalformedURLException e) {
+            URI baseUri = base.toURI();
+            return baseUri.resolve(referencia).toString();
+        } catch (URISyntaxException | IllegalArgumentException e) {
             return referencia;
         }
     }
@@ -243,4 +239,4 @@ public class MarkdownConverter {
                     .replace("[", "\\[")
                     .replace("]", "\\]");
     }
-} 
+}
